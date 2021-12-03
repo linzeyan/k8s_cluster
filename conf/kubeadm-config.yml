@@ -1,0 +1,82 @@
+---
+# https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "${ip}"
+  bindPort: 6443
+nodeRegistration:
+  criSocket: "unix:///var/run/crio/crio.sock"
+  taints:
+    - key: "node-role.kubernetes.io/master"
+      value: ""
+      effect: "NoSchedule"
+  imagePullPolicy: "IfNotPresent"
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: v${kubeVersion}
+imageRepository: k8s.gcr.io
+apiServer:
+  timeoutForControlPlane: 4m0s
+  certSANs:
+  - "127.0.0.1"
+  - "localhost"
+  - "${VIP}"
+${perip2}
+  extraArgs:
+    secure-port: "6443"
+    service-node-port-range: 1-65000
+    authorization-mode: Node,RBAC
+    enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeClaimResize,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,Priority"
+    storage-backend: etcd3
+    etcd-servers: ${etcd2379}
+certificatesDir: /etc/kubernetes/pki
+clusterName: ${clusterName}
+controllerManager:
+  extraVolumes:
+    - hostPath: /etc/localtime
+      mountPath: /etc/localtime
+      name: localtime
+      readOnly: true
+controlPlaneEndpoint: "${VIP}:6443"
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+    serverCertSANs:
+${perip4}
+    peerCertSANS:
+${perip4}
+    extraArgs:
+      auto-compaction-retention: "1h"
+      max-request-bytes: "33554432"
+      quota-backend-bytes: "8589934592"
+      enable-v2: "false"
+networking:
+  # This CIDR is a Calico default. Substitute or remove for your CNI provider.
+  podSubnet: "10.10.0.1/16"
+  dnsDomain: cluster.local
+  serviceSubnet: 10.96.0.0/12
+---
+# https://kubernetes.io/docs/reference/config-api/kube-proxy-config.v1alpha1/
+# https://godoc.org/k8s.io/kube-proxy/config/v1alpha1#KubeProxyConfiguration
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: ipvs
+ipvs:
+  excludeCIDRs: null
+  syncPeriod: 15s
+  minSyncPeriod: 0s
+  scheduler: "rr"
+  strictARP: false
+  tcpTimeout: 15s
+  tcpFinTimeout: 15s
+  udpTimeout: 15s
+---
+# https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
+# https://godoc.org/k8s.io/kubelet/config/v1beta1#KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+clusterDNS:
+  - 10.96.0.10

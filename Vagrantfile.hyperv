@@ -1,0 +1,23 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box_check_update = false
+  config.vm.provider 'hyperv'
+  $num_instances = 3
+  (1..$num_instances).each do |i|
+    config.vm.define "node#{i}" do |node|
+      node.vm.box = "ubuntu/focal64"
+      node.vm.hostname = "node#{i}"
+      privateIP = "10.0.0.#{i+100}"
+      node.vm.network "private_network", ip: privateIP
+      node.vm.synced_folder ".", "/vagrant", type: "rsync",
+      node.vm.provider "hyperv" do |hv|
+        hv.memory = "3072"
+        hv.cpus = 1
+        hv.vmname = "node#{i}"
+      end
+      node.vm.provision "shell", path: "install.bash"
+    end
+  end
+end
