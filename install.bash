@@ -230,10 +230,6 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
     key=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
     for i in $(seq 1 $((${instanceNum} - 1))); do
         eval ip="\$node${i}"
-        ssh -p ${sshPort} node${i} "sudo mkdir -p \${HOME}/.kube &&\
-                                    sudo ln -sf /etc/kubernetes/admin.conf ~/.kube/config &&\
-                                    sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config &&\
-                                    kubectl completion bash >> ~/.bashrc"
         ssh -p ${sshPort} node${i} "kubeadm join ${VIP}:6443 --token ${token} \
                                         --discovery-token-ca-cert-hash sha256:${key} \
                                         --apiserver-advertise-address ${ip} \
@@ -241,6 +237,10 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
         sleep 10
         ssh -p ${sshPort} node${i} 'sed -i "/--port=0/d" /etc/kubernetes/manifests/kube-controller-manager.yaml /etc/kubernetes/manifests/kube-scheduler.yaml'
         ssh -p ${sshPort} node${i} 'systemctl restart kubelet'
+        ssh -p ${sshPort} node${i} "sudo mkdir -p \${HOME}/.kube &&\
+                                    sudo ln -sf /etc/kubernetes/admin.conf ~/.kube/config &&\
+                                    sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config &&\
+                                    kubectl completion bash >> ~/.bashrc"
     done
     kubectl taint nodes --all node-role.kubernetes.io/master-
 fi
