@@ -29,11 +29,15 @@ ${perip2}
     service-node-port-range: 1-65000
     authorization-mode: Node,RBAC
     enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeClaimResize,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,Priority"
+    default-not-ready-toleration-seconds: "10"
+    default-unreachable-toleration-seconds: "10"
     storage-backend: etcd3
     etcd-servers: ${etcd2379}
 certificatesDir: /etc/kubernetes/pki
 clusterName: ${clusterName}
 controllerManager:
+  extraArgs:
+    pod-eviction-timeout: "30s"
   extraVolumes:
     - hostPath: /etc/localtime
       mountPath: /etc/localtime

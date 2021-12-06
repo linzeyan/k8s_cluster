@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-set -e -x -u
+set -o errexit
+set -o nounset
+set -o xtrace
+set -o pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 export PATH=${PATH}:/usr/local/bin
@@ -169,6 +172,26 @@ if [ ! -f /etc/keepalived/keepalived.conf ]; then
     sudo systemctl enable --now keepalived
 fi
 
+## Add logrotate
+rotateConfig='/etc/logrotate.d/k8s'
+if [ ! -f ${rotateConfig} ]; then
+    cat <<'k8s' >${rotateConfig}
+/var/log/calico/*/*.log
+/var/log/pods/*/*.log
+/var/log/pods/*/*/*.log
+{
+    daily
+    dateext
+    rotate 52
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
+k8s
+fi
+
 ## Install kubernetes cluster
 if [[ $(hostname) == "node${instanceNum}" ]]; then
     echo 'Cluster initial...'
@@ -207,9 +230,8 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
     key=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
     for i in $(seq 1 $((${instanceNum} - 1))); do
         eval ip="\$node${i}"
-        ssh -p ${sshPort} node${i} 'sed -i "/--port=0/d" /etc/kubernetes/manifests/kube-controller-manager.yaml /etc/kubernetes/manifests/kube-scheduler.yaml'
-        ssh -p ${sshPort} node${i} 'systemctl restart kubelet'
-        ssh -p ${sshPort} node${i} "sudo ln -sf /etc/kubernetes/admin.conf ~/.kube/config &&\
+        ssh -p ${sshPort} node${i} "sudo mkdir -p \${HOME}/.kube &&\
+                                    sudo ln -sf /etc/kubernetes/admin.conf ~/.kube/config &&\
                                     sudo chown \$(id -u):\$(id -g) \${HOME}/.kube/config &&\
                                     kubectl completion bash >> ~/.bashrc"
         ssh -p ${sshPort} node${i} "kubeadm join ${VIP}:6443 --token ${token} \
@@ -217,6 +239,8 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
                                         --apiserver-advertise-address ${ip} \
                                         --control-plane --ignore-preflight-errors=all"
         sleep 10
+        ssh -p ${sshPort} node${i} 'sed -i "/--port=0/d" /etc/kubernetes/manifests/kube-controller-manager.yaml /etc/kubernetes/manifests/kube-scheduler.yaml'
+        ssh -p ${sshPort} node${i} 'systemctl restart kubelet'
     done
     kubectl taint nodes --all node-role.kubernetes.io/master-
 fi
