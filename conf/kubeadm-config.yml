@@ -37,6 +37,7 @@ certificatesDir: /etc/kubernetes/pki
 clusterName: ${clusterName}
 controllerManager:
   extraArgs:
+    bind-address: 0.0.0.0
     pod-eviction-timeout: "30s"
   extraVolumes:
     - hostPath: /etc/localtime
@@ -61,6 +62,9 @@ networking:
   podSubnet: "10.10.0.1/16"
   dnsDomain: cluster.local
   serviceSubnet: 10.96.0.0/12
+scheduler:
+  extraArgs:
+    bind-address: 0.0.0.0
 ---
 # https://kubernetes.io/docs/reference/config-api/kube-proxy-config.v1alpha1/
 # https://godoc.org/k8s.io/kube-proxy/config/v1alpha1#KubeProxyConfiguration
