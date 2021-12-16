@@ -1,5 +1,5 @@
 ---
-# https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/
+## https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 localAPIEndpoint:
@@ -7,10 +7,6 @@ localAPIEndpoint:
   bindPort: 6443
 nodeRegistration:
   criSocket: "unix:///var/run/crio/crio.sock"
-  taints:
-    - key: "node-role.kubernetes.io/master"
-      value: ""
-      effect: "NoSchedule"
   imagePullPolicy: "IfNotPresent"
 ---
 apiVersion: kubeadm.k8s.io/v1beta3
@@ -20,13 +16,13 @@ imageRepository: k8s.gcr.io
 apiServer:
   timeoutForControlPlane: 4m0s
   certSANs:
-  - "127.0.0.1"
-  - "localhost"
-  - "${VIP}"
-${perip2}
+    - "127.0.0.1"
+    - "localhost"
+    - "${VIP}"
+    - ${perip4}
   extraArgs:
     secure-port: "6443"
-    service-node-port-range: 1-65000
+    service-node-port-range: "${nodePortRange}"
     authorization-mode: Node,RBAC
     enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeClaimResize,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,Priority"
     default-not-ready-toleration-seconds: "10"
@@ -45,29 +41,38 @@ controllerManager:
       name: localtime
       readOnly: true
 controlPlaneEndpoint: "${VIP}:6443"
+dns:
+  type: CoreDNS
 etcd:
   local:
     dataDir: /var/lib/etcd
     serverCertSANs:
-${perip4}
+      - ${perip4}
     peerCertSANS:
-${perip4}
+      - ${perip4}
     extraArgs:
       auto-compaction-retention: "1h"
       max-request-bytes: "33554432"
       quota-backend-bytes: "8589934592"
       enable-v2: "false"
 networking:
-  # This CIDR is a Calico default. Substitute or remove for your CNI provider.
-  podSubnet: "10.10.0.1/16"
+  ## This CIDR is a Calico default. Substitute or remove for your CNI provider.
+  # podSubnet: "10.10.0.1/16"
+  ## Cilium
+  podSubnet: "${podSubnet}"
   dnsDomain: cluster.local
-  serviceSubnet: 10.96.0.0/12
+  serviceSubnet: "${serviceSubnet}"
 scheduler:
   extraArgs:
     bind-address: 0.0.0.0
+  extraVolumes:
+    - hostPath: /etc/localtime
+      mountPath: /etc/localtime
+      name: localtime
+      readOnly: true
 ---
-# https://kubernetes.io/docs/reference/config-api/kube-proxy-config.v1alpha1/
-# https://godoc.org/k8s.io/kube-proxy/config/v1alpha1#KubeProxyConfiguration
+## https://kubernetes.io/docs/reference/config-api/kube-proxy-config.v1alpha1/
+## https://godoc.org/k8s.io/kube-proxy/config/v1alpha1#KubeProxyConfiguration
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
 kind: KubeProxyConfiguration
 mode: ipvs
@@ -82,10 +87,13 @@ ipvs:
   tcpFinTimeout: 15s
   udpTimeout: 15s
 ---
-# https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
-# https://godoc.org/k8s.io/kubelet/config/v1beta1#KubeletConfiguration
+## https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
+## https://godoc.org/k8s.io/kubelet/config/v1beta1#KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
 clusterDNS:
-  - 10.96.0.10
+  - ${serviceSubnetPrefix}.53
+  - ${serviceSubnetPrefix}.153
+  - ${serviceSubnetPrefix}.253
+failSwapOn: true
