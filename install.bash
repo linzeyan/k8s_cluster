@@ -8,7 +8,7 @@ set -o pipefail
 export DEBIAN_FRONTEND=noninteractive
 export PATH=${PATH}:/usr/local/bin
 
-if [[ "${1:-init}" == "delete" ]]; then
+if [[ "${1:-install}" == "delete" ]]; then
     kubeadm reset
     iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
     ipvsadm -C
@@ -20,11 +20,12 @@ fi
 . /etc/os-release
 OS="${NAME}_${VERSION_ID}"
 baseDir='/vagrant'
-netIF='enp0s8'
+netIF="$(ip a | grep 'enp0s8' | awk 'NR==2{print $NF}' || ip r get 1.1.1.1 | awk 'NR==1{print $5}')"
 declare -i instanceNum=3
 declare -i ipRange=100
 clusterIPPrefix='192.168.56'
 clusterName='vagrant'
+clusterId=100
 VIP="${clusterIPPrefix}.$((9 + ${ipRange}))"
 podSubnet='10.10.0.0/16'
 serviceSubnet='10.96.0.0/12'
@@ -32,9 +33,8 @@ serviceSubnetPrefix="$(echo ${serviceSubnet} | awk -F '.' '{print $1"."$2"."$3}'
 nodePortRange='1-65000'
 kubeVersion='1.22.4'
 crioVersion='1.20'
-network='cilium'
+kubeNetwork='cilium'
 timezone='Asia/Taipei'
-# cluster2spaces=''
 cluster4spaces=''
 etcdCluster79=''
 for ((i = 1; i <= ${instanceNum}; i++)); do
@@ -44,7 +44,6 @@ for ((i = 1; i <= ${instanceNum}; i++)); do
         echo "${ip}  node${i}" >>/etc/hosts
     fi
     etcdCluster79="${etcdCluster79}https://${ip}:2379,"
-    # cluster2spaces="${cluster2spaces}  - \"node${i}\"\n  - \"${ip}\"\n"
     cluster4spaces="${cluster4spaces}\ \ \ \ - \"node${i}\"\n    - \"${ip}\"\n"
 done
 eval ip="\$$(hostname)"
@@ -89,6 +88,7 @@ if ! which ipvsadm 2>&1 >/dev/null; then
     sudo apt-get -qq upgrade -y
     sudo apt-get -qq install -y \
         vim \
+        curl \
         git \
         cmake \
         build-essential \
@@ -171,10 +171,9 @@ net.netfilter.nf_conntrack_max=2310720
 vm.overcommit_memory=1
 vm.panic_on_oom=0
 vm.swappiness=0
-
 EOF
 
-    cat >/etc/security/limits.d/kubernetes.conf <<EOF
+    sudo cat >/etc/security/limits.d/kubernetes.conf <<EOF
 *       soft    nproc   131072
 *       hard    nproc   131072
 *       soft    nofile  131072
@@ -190,7 +189,7 @@ fi
 
 ## Install kubernetes
 if ! which kubeadm 2>&1 >/dev/null; then
-    sudo apt-get -qq install -y apt-transport-https curl
+    sudo apt-get -qq install -y apt-transport-https
     curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
     echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee --append /etc/apt/sources.list.d/kubernetes.list
     sudo apt-get -qq update -y
@@ -297,37 +296,32 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
     kubectl taint nodes --all node-role.kubernetes.io/master-
     sleep 20
     ## Install network
-    if [[ ${network} == "calico" ]]; then
+    if [[ ${kubeNetwork} == "calico" ]]; then
         # kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
         helm repo add projectcalico https://docs.projectcalico.org/charts
         helm repo update
         helm install calico projectcalico/tigera-operator --version v3.21.2
-    elif [[ ${network} == "cilium" ]]; then
+    elif [[ ${kubeNetwork} == "cilium" ]]; then
         ## https://github.com/cilium/cilium/blob/v1.11.0/install/kubernetes/cilium/values.yaml
         helm repo add cilium https://helm.cilium.io/
         helm repo update
-        # --set kubeProxyReplacement=strict \
-        # --set nodePort.range="${nodePortRange}" \
         helm install cilium cilium/cilium --version 1.11.0 \
             --namespace=kube-system \
             --set k8sServiceHost=${VIP} \
             --set k8sServicePort=6443 \
             --set cluster.name=${clusterName} \
-            --set cluster.id=100 \
+            --set cluster.id=${clusterId} \
             --set loadBalancer.mode=hybrid \
-            --set nodeinit.enabled=true \
             --set externalIPs.enabled=true \
             --set nodePort.enabled=true \
             --set hostPort.enabled=true \
             --set pullPolicy=IfNotPresent \
             --set hubble.enabled=true \
-            --set hubble.metrics.enabled="{dns,drop,tcp,flow,port-distribution,icmp,http}" \
-            --set hubble.listenAddress=":4244" \
             --set hubble.relay.enabled=true \
             --set hubble.ui.enabled=true \
             --set prometheus.enabled=true \
             --set prometheus.port=9090 \
-            --set operatorPrometheus.enabled=true \
+            --set operator.Prometheus.enabled=true \
             --set ipam.mode=cluster-pool \
             --set ipam.operator.clusterPoolIPv4PodCIDR=${podSubnet} \
             --set ipam.operator.clusterPoolIPv4MaskSize=24 \
