@@ -233,27 +233,27 @@ if [ ! -f ${rotateConfig} ]; then
 k8s
 fi
 
-## Install helm
-if ! which helm 2>&1 >/dev/null; then
-    echo 'Install helm'
-    curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
-    echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-    sudo apt-get -qq update -y
-    sudo apt-get -qq install -y helm
-fi
-
-## Install cilium
-if ! which cilium 2>&1 >/dev/null; then
-    echo 'Install cilium'
-    wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
-    wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz.sha256sum
-    sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
-    sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-    rm -f cilium-linux-amd64.tar.gz{,.sha256sum}
-fi
-
 ## Install kubernetes cluster
 if [[ $(hostname) == "node${instanceNum}" ]]; then
+    ## Install helm
+    if ! which helm 2>&1 >/dev/null; then
+        echo 'Install helm'
+        curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
+        echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+        sudo apt-get -qq update -y
+        sudo apt-get -qq install -y helm
+    fi
+
+    ## Install cilium
+    if ! which cilium 2>&1 >/dev/null; then
+        echo 'Install cilium'
+        wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
+        wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz.sha256sum
+        sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
+        sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+        rm -f cilium-linux-amd64.tar.gz{,.sha256sum}
+    fi
+
     echo 'Cluster initial...'
     kubeadm init --config ${baseDir}/conf/kubeadm-config.yml --ignore-preflight-errors=all --skip-phases=addon/kube-proxy
     sudo mkdir -p ${HOME}/.kube
@@ -307,6 +307,7 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
         helm repo add cilium https://helm.cilium.io/
         helm repo update
         # --set kubeProxyReplacement=strict \
+        # --set nodePort.range="${nodePortRange}" \
         helm install cilium cilium/cilium --version 1.11.0 \
             --namespace=kube-system \
             --set k8sServiceHost=${VIP} \
@@ -317,7 +318,6 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
             --set nodeinit.enabled=true \
             --set externalIPs.enabled=true \
             --set nodePort.enabled=true \
-            --set nodePort.range="${nodePortRange}" \
             --set hostPort.enabled=true \
             --set pullPolicy=IfNotPresent \
             --set hubble.enabled=true \
