@@ -19,6 +19,15 @@ Vagrant.configure("2") do |config|
         vb.cpus = 1
         vb.name = "node#{i}"
       end
+      vagrantRoot = File.dirname(__FILE__)
+      node.vm.provision "shell" do |s|
+        publicKey = File.readlines("#{vagrantRoot}/ssh/id_rsa.pub").first.strip
+        s.inline = <<-SHELL
+        echo #{publicKey} >> /home/vagrant/.ssh/authorized_keys
+        echo #{publicKey} >> /root/.ssh/authorized_keys
+        SHELL
+      end
+      node.vm.provision "file", source: "#{vagrantRoot}/ssh/id_rsa", destination: "/home/vagrant/.ssh/id_rsa"
       node.vm.provision "shell", path: "install.bash"
     end
   end

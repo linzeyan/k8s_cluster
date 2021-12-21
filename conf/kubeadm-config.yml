@@ -4,7 +4,7 @@ apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: "${ip}"
-  bindPort: 6443
+  bindPort: ${securePort}
 nodeRegistration:
   criSocket: "unix:///var/run/crio/crio.sock"
   imagePullPolicy: "IfNotPresent"
@@ -21,7 +21,7 @@ apiServer:
     - "${VIP}"
     - ${perip4}
   extraArgs:
-    secure-port: "6443"
+    secure-port: "${securePort}"
     service-node-port-range: "${nodePortRange}"
     authorization-mode: Node,RBAC
     enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeClaimResize,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,Priority"
@@ -40,7 +40,7 @@ controllerManager:
       mountPath: /etc/localtime
       name: localtime
       readOnly: true
-controlPlaneEndpoint: "${VIP}:6443"
+controlPlaneEndpoint: "${VIP}:${securePort}"
 dns:
   type: CoreDNS
 etcd:
@@ -93,7 +93,5 @@ apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
 clusterDNS:
-  - ${serviceSubnetPrefix}.53
-  - ${serviceSubnetPrefix}.153
-  - ${serviceSubnetPrefix}.253
+  - ${serviceSubnetPrefix}.10
 failSwapOn: true

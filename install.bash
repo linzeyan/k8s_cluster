@@ -27,6 +27,7 @@ clusterIPPrefix='192.168.56'
 clusterName='vagrant'
 clusterId=100
 VIP="${clusterIPPrefix}.$((9 + ${ipRange}))"
+securePort=6443
 podSubnet='10.10.0.0/16'
 serviceSubnet='10.96.0.0/12'
 serviceSubnetPrefix="$(echo ${serviceSubnet} | awk -F '.' '{print $1"."$2"."$3}')"
@@ -59,6 +60,7 @@ if grep 'perip4' ${baseDir}/conf/* 2>&1 >/dev/null; then
     sed -i "s|\${serviceSubnetPrefix}|${serviceSubnetPrefix}|g" ${baseDir}/conf/*
     sed -i "s|\${nodePortRange}|${nodePortRange}|g" ${baseDir}/conf/*
     sed -i "s/\${VIP}/${VIP}/g" ${baseDir}/conf/*
+    sed -i "s/\${securePort}/${securePort}/g" ${baseDir}/conf/*
     sed -i "s|\${etcd2379}|${etcd2379}|g" ${baseDir}/conf/*
     sed -i "s|\${netIF}|${netIF}|g" ${baseDir}/conf/*
     sed -i "s|\${kubeVersion}|${kubeVersion}|g" ${baseDir}/conf/*
@@ -281,7 +283,7 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
     key=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
     for i in $(seq 1 $((${instanceNum} - 1))); do
         eval ip="\$node${i}"
-        ssh -p ${sshPort} node${i} "kubeadm join ${VIP}:6443 --token ${token} \
+        ssh -p ${sshPort} node${i} "kubeadm join ${VIP}:${securePort} --token ${token} \
                                         --discovery-token-ca-cert-hash sha256:${key} \
                                         --apiserver-advertise-address ${ip} \
                                         --control-plane --ignore-preflight-errors=all"
@@ -305,23 +307,22 @@ if [[ $(hostname) == "node${instanceNum}" ]]; then
         ## https://github.com/cilium/cilium/blob/v1.11.0/install/kubernetes/cilium/values.yaml
         helm repo add cilium https://helm.cilium.io/
         helm repo update
+
         helm install cilium cilium/cilium --version 1.11.0 \
             --namespace=kube-system \
+            --set tunnel=disabled \
+            --set autoDirectNodeRoutes=true \
+            --set loadBalancer.mode=hybrid \
+            --set kubeProxyReplacement=strict \
+            --set devices=${netIF} \
             --set k8sServiceHost=${VIP} \
-            --set k8sServicePort=6443 \
+            --set k8sServicePort=${securePort} \
             --set cluster.name=${clusterName} \
             --set cluster.id=${clusterId} \
-            --set loadBalancer.mode=hybrid \
-            --set externalIPs.enabled=true \
-            --set nodePort.enabled=true \
-            --set hostPort.enabled=true \
-            --set pullPolicy=IfNotPresent \
             --set hubble.enabled=true \
             --set hubble.relay.enabled=true \
             --set hubble.ui.enabled=true \
-            --set prometheus.enabled=true \
-            --set prometheus.port=9090 \
-            --set operator.Prometheus.enabled=true \
+            --set hubble.metrics.enabled="{dns,drop,tcp,flow,port-distribution,icmp,http}" \
             --set ipam.mode=cluster-pool \
             --set ipam.operator.clusterPoolIPv4PodCIDR=${podSubnet} \
             --set ipam.operator.clusterPoolIPv4MaskSize=24 \
