@@ -24,7 +24,7 @@ apiServer:
     secure-port: "${securePort}"
     service-node-port-range: "${nodePortRange}"
     authorization-mode: Node,RBAC
-    enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeClaimResize,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,Priority"
+    enable-admission-plugins: "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeClaimResize,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,Priority,NamespaceAutoProvision"
     default-not-ready-toleration-seconds: "10"
     default-unreachable-toleration-seconds: "10"
     storage-backend: etcd3
